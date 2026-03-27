@@ -9,11 +9,10 @@ dotenv.config();
 const app = express();
 
 /* ---------------- MIDDLEWARE ---------------- */
-app.use(cors()); // Allows your React frontend to connect
-app.use(express.json()); // Parses incoming JSON requests (Critical for req.body)
+app.use(cors()); 
+app.use(express.json()); 
 
 /* ---------------- ROUTE IMPORTS ---------------- */
-// Ensure these files exist in your /routes folder
 const userRoutes = require("./routes/userRoutes");
 const deptRoutes = require("./routes/deptRoutes");
 const deviceRoutes = require("./routes/deviceRoutes");
@@ -21,38 +20,50 @@ const fenceRoutes = require("./routes/fenceRoutes");
 const intercomRoutes = require("./routes/intercomRoutes");
 
 /* ---------------- API ENDPOINTS ---------------- */
-// All routes are prefixed to stay organized
-app.use("/api/users", userRoutes);           // Login/Register
-app.use("/api/departments", deptRoutes);     // Dept Management
-app.use("/api/devices", deviceRoutes);       // Device Management
-app.use("/api/fences", fenceRoutes);         // Fence/Map Management
-app.use("/api/intercom", intercomRoutes);    // Intercom Groups & Personnel
+app.use("/api/users", userRoutes);
+app.use("/api/departments", deptRoutes);
+app.use("/api/devices", deviceRoutes);
+app.use("/api/fences", fenceRoutes);
+app.use("/api/intercom", intercomRoutes);
 
 /* ---------------- TEST & HEALTH CHECK ---------------- */
 app.get("/", (req, res) => {
   res.json({ 
     status: "Online", 
     message: "BRICKS Bodycam Backend API is running...",
-    version: "1.0.0"
+    db_status: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected",
+    version: "1.0.1"
   });
 });
 
 /* ---------------- DATABASE CONNECTION ---------------- */
-// Using options for stability
 const MONGO_URI = process.env.MONGO_URI;
 
+// Connection Options for Render/MongoDB Atlas Stability
+const connectionOptions = {
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+  socketTimeoutMS: 45000,         // Close sockets after 45s of inactivity
+  family: 4                       // Use IPv4, skip trying IPv6
+};
+
+mongoose.set('strictQuery', false);
+
 mongoose
-  .connect(MONGO_URI)
+  .connect(MONGO_URI, connectionOptions)
   .then(() => {
     console.log("✅ MongoDB Connected Successfully");
   })
   .catch((err) => {
     console.error("❌ MongoDB Connection Error:", err.message);
-    process.exit(1); // Exit if DB fails
+    // On Render, if DB fails initially, we let it stay up so we can check logs
   });
 
+// Log connection errors after initial connection
+mongoose.connection.on('error', err => {
+  console.error("Mongoose Runtime Error:", err);
+});
+
 /* ---------------- ERROR HANDLING ---------------- */
-// Catch-all for undefined routes
 app.use((req, res, next) => {
   res.status(404).json({ message: "Route not found" });
 });
