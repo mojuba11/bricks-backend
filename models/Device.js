@@ -4,7 +4,7 @@ const deviceSchema = new mongoose.Schema({
   // Core Identity
   deviceId: { type: String, required: true, unique: true },
   deviceName: { type: String, required: true },
-  deviceSerial: { type: String }, // Keep this if you use it elsewhere
+  deviceSerial: { type: String }, 
   
   // Organization & Specs
   dept: { type: String },
@@ -16,6 +16,10 @@ const deviceSchema = new mongoose.Schema({
   videoServer: { type: String, default: "Video Server H264+AAC" },
   recordVideo: { type: String, default: "No" },
   
+  // NEW: Live Camera Sync
+  // This stores the RTSP/HLS/HTTP stream link for the live feed
+  streamUrl: { type: String, default: "" },
+
   // GPS & Fence
   gpsType: { type: String, default: "WGS84" },
   gpsInterval: { type: String, default: "1000" },
@@ -29,7 +33,7 @@ const deviceSchema = new mongoose.Schema({
   softwareVersion: String,
   intelligentAnalysis: String,
 
-  // UI/Map related (Added for your Live Map later)
+  // UI/Map related
   status: { type: String, default: "Offline" },
   batteryLevel: { type: Number, default: 100 }
 }, { timestamps: true });
