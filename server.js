@@ -15,14 +15,19 @@ app.use(express.json());
 /* ---------------- ROUTE IMPORTS ---------------- */
 const userRoutes = require("./routes/userRoutes");
 const deptRoutes = require("./routes/deptRoutes");
-const deviceRoutes = require("./routes/deviceRoutes");
+const deviceRoutes = require("./routes/deviceRoutes"); // Matches your router file
 const fenceRoutes = require("./routes/fenceRoutes");
 const intercomRoutes = require("./routes/intercomRoutes");
 
 /* ---------------- API ENDPOINTS ---------------- */
 app.use("/api/users", userRoutes);
 app.use("/api/departments", deptRoutes);
-app.use("/api/devices", deviceRoutes);
+
+/** * FIXED: Changed from "/api/devices" to "/api/device" 
+ * to match Frontend API_URL: https://.../api/device
+ */
+app.use("/api/device", deviceRoutes); 
+
 app.use("/api/fences", fenceRoutes);
 app.use("/api/intercom", intercomRoutes);
 
@@ -32,18 +37,17 @@ app.get("/", (req, res) => {
     status: "Online", 
     message: "BRICKS Bodycam Backend API is running...",
     db_status: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected",
-    version: "1.0.1"
+    version: "1.0.2" // Updated version for tracking
   });
 });
 
 /* ---------------- DATABASE CONNECTION ---------------- */
 const MONGO_URI = process.env.MONGO_URI;
 
-// Connection Options for Render/MongoDB Atlas Stability
 const connectionOptions = {
-  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-  socketTimeoutMS: 45000,         // Close sockets after 45s of inactivity
-  family: 4                       // Use IPv4, skip trying IPv6
+  serverSelectionTimeoutMS: 5000, 
+  socketTimeoutMS: 45000,         
+  family: 4                       
 };
 
 mongoose.set('strictQuery', false);
@@ -55,17 +59,18 @@ mongoose
   })
   .catch((err) => {
     console.error("❌ MongoDB Connection Error:", err.message);
-    // On Render, if DB fails initially, we let it stay up so we can check logs
   });
 
-// Log connection errors after initial connection
 mongoose.connection.on('error', err => {
   console.error("Mongoose Runtime Error:", err);
 });
 
 /* ---------------- ERROR HANDLING ---------------- */
+// Fallback for missing routes
 app.use((req, res, next) => {
-  res.status(404).json({ message: "Route not found" });
+  res.status(404).json({ 
+    message: `Route ${req.originalUrl} not found. Check if you used singular or plural.` 
+  });
 });
 
 /* ---------------- SERVER START ---------------- */
