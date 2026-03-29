@@ -1,23 +1,30 @@
 const User = require("../models/User"); 
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken"); // Ensure you have jwt installed
+const jwt = require("jsonwebtoken");
 
-// Helper to generate JWT (Match this with your secret in .env)
+// Helper to generate JWT
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 };
 
-// @desc    Get all users
+// @desc    Get all users (with Frontend Mapping)
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.find().select("-password");
-    res.json(users);
+    
+    // Fix: Map 'name' to 'userName' for the frontend table
+    const mappedUsers = users.map(user => {
+      const u = user.toObject();
+      return { ...u, userName: u.name };
+    });
+
+    res.json(mappedUsers);
   } catch (err) {
     res.status(500).json({ message: "Server Error: " + err.message });
   }
 };
 
-// @desc    Search/Filter users
+// @desc    Search/Filter users (with Frontend Mapping)
 exports.searchUsers = async (req, res) => {
   try {
     const { userId, dept } = req.query;
@@ -26,7 +33,14 @@ exports.searchUsers = async (req, res) => {
     if (dept) query.dept = dept;
 
     const users = await User.find(query).select("-password");
-    res.json(users);
+    
+    // Fix: Map 'name' to 'userName' for search results
+    const mappedUsers = users.map(user => {
+      const u = user.toObject();
+      return { ...u, userName: u.name };
+    });
+
+    res.json(mappedUsers);
   } catch (err) {
     res.status(500).json({ message: "Search Error: " + err.message });
   }
@@ -36,6 +50,7 @@ exports.searchUsers = async (req, res) => {
 exports.createUser = async (req, res) => {
   try {
     const { userId, email, password, userName } = req.body;
+    
     const existingUser = await User.findOne({ $or: [{ userId }, { email }] });
     if (existingUser) return res.status(400).json({ message: "User ID or Email already exists" });
 
@@ -44,14 +59,15 @@ exports.createUser = async (req, res) => {
 
     const newUser = new User({
       ...req.body,
-      name: userName, // Map frontend userName to backend name
+      name: userName, // Save frontend 'userName' into backend 'name'
       password: hashedPassword
     });
 
     await newUser.save();
+    
     const userResponse = newUser.toObject();
     delete userResponse.password;
-    res.status(201).json(userResponse);
+    res.status(201).json({ ...userResponse, userName: userResponse.name });
   } catch (err) {
     res.status(400).json({ message: "Create Error: " + err.message });
   }
@@ -77,7 +93,9 @@ exports.updateUser = async (req, res) => {
     ).select("-password");
     
     if (!updatedUser) return res.status(404).json({ message: "User not found" });
-    res.json(updatedUser);
+    
+    const response = updatedUser.toObject();
+    res.json({ ...response, userName: response.name });
   } catch (err) {
     res.status(400).json({ message: "Update Error: " + err.message });
   }
@@ -107,7 +125,7 @@ exports.registerUser = async (req, res) => {
     const user = await User.create({
       userId,
       email,
-      name: userName, // Ensure registration also maps the name correctly
+      name: userName, 
       password: hashedPassword,
       ...req.body
     });
@@ -116,7 +134,7 @@ exports.registerUser = async (req, res) => {
       res.status(201).json({
         _id: user._id,
         userId: user.userId,
-        userName: user.name, // Return as userName for frontend state
+        userName: user.name, 
         email: user.email,
         token: generateToken(user._id)
       });
@@ -136,7 +154,7 @@ exports.loginUser = async (req, res) => {
       res.json({
         _id: user._id,
         userId: user.userId,
-        userName: user.name, // Important: Frontend expects 'userName'
+        userName: user.name, 
         email: user.email,
         token: generateToken(user._id)
       });
