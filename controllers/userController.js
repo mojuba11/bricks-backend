@@ -1,5 +1,11 @@
 const User = require("../models/User"); 
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken"); // Ensure you have jwt installed
+
+// Helper to generate JWT (Match this with your secret in .env)
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
+};
 
 // @desc    Get all users
 exports.getUsers = async (req, res) => {
@@ -16,7 +22,6 @@ exports.searchUsers = async (req, res) => {
   try {
     const { userId, dept } = req.query;
     let query = {};
-    
     if (userId) query.userId = new RegExp(userId, 'i'); 
     if (dept) query.dept = dept;
 
@@ -27,38 +32,27 @@ exports.searchUsers = async (req, res) => {
   }
 };
 
-// @desc    Create/Add new user
+// @desc    Create/Add new user (Admin Panel)
 exports.createUser = async (req, res) => {
   try {
     const { userId, email, password, userName } = req.body;
-    
-    // 1. Check if user already exists
     const existingUser = await User.findOne({ $or: [{ userId }, { email }] });
-    if (existingUser) {
-      return res.status(400).json({ message: "User ID or Email already exists" });
-    }
+    if (existingUser) return res.status(400).json({ message: "User ID or Email already exists" });
 
-    // 2. Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 3. Create user object
-    // CRITICAL FIX: We map 'userName' from the frontend to 'name' for the database
     const newUser = new User({
       ...req.body,
-      name: userName, // This satisfies the 'name: required' validation
+      name: userName, // Map frontend userName to backend name
       password: hashedPassword
     });
 
     await newUser.save();
-
-    // 4. Return user without password
     const userResponse = newUser.toObject();
     delete userResponse.password;
     res.status(201).json(userResponse);
-
   } catch (err) {
-    // This catches the 'validation failed' error and sends it to the frontend
     res.status(400).json({ message: "Create Error: " + err.message });
   }
 };
@@ -67,18 +61,12 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const updateData = { ...req.body };
+    if (updateData.userName) updateData.name = updateData.userName;
 
-    // Map name if userName is provided during update
-    if (updateData.userName) {
-      updateData.name = updateData.userName;
-    }
-
-    // Hash password if it's being changed
     if (updateData.password && updateData.password.trim() !== "") {
       const salt = await bcrypt.genSalt(10);
       updateData.password = await bcrypt.hash(updateData.password, salt);
     } else {
-      // Prevent overwriting with an empty string
       delete updateData.password;
     }
 
@@ -88,10 +76,7 @@ exports.updateUser = async (req, res) => {
       { new: true, runValidators: true }
     ).select("-password");
     
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
+    if (!updatedUser) return res.status(404).json({ message: "User not found" });
     res.json(updatedUser);
   } catch (err) {
     res.status(400).json({ message: "Update Error: " + err.message });
@@ -102,21 +87,63 @@ exports.updateUser = async (req, res) => {
 exports.deleteUser = async (req, res) => {
   try {
     const deletedUser = await User.findByIdAndDelete(req.params.id);
-    if (!deletedUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!deletedUser) return res.status(404).json({ message: "User not found" });
     res.json({ message: "User deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Delete Error: " + err.message });
   }
 };
 
-// Keep your existing login/register logic below
+// @desc    Register User (Public)
 exports.registerUser = async (req, res) => {
-    // Use the same 'name: userName' logic here if your register form 
-    // also uses 'userName' as the input key.
+  try {
+    const { userId, email, password, userName } = req.body;
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: "User already exists" });
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const user = await User.create({
+      userId,
+      email,
+      name: userName, // Ensure registration also maps the name correctly
+      password: hashedPassword,
+      ...req.body
+    });
+
+    if (user) {
+      res.status(201).json({
+        _id: user._id,
+        userId: user.userId,
+        userName: user.name, // Return as userName for frontend state
+        email: user.email,
+        token: generateToken(user._id)
+      });
+    }
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
 };
 
+// @desc    Login User
 exports.loginUser = async (req, res) => {
-    // Existing login logic
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+
+    if (user && (await bcrypt.compare(password, user.password))) {
+      res.json({
+        _id: user._id,
+        userId: user.userId,
+        userName: user.name, // Important: Frontend expects 'userName'
+        email: user.email,
+        token: generateToken(user._id)
+      });
+    } else {
+      res.status(401).json({ message: "Invalid email or password" });
+    }
+  } catch (err) {
+    res.status(500).json({ message: "Login Error: " + err.message });
+  }
 };
