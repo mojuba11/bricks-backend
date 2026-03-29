@@ -2,12 +2,12 @@ const mongoose = require("mongoose");
 
 const deviceSchema = new mongoose.Schema({
   // Core Identity
-  deviceId: { type: String, required: true, unique: true },
+  deviceId: { type: String, required: true, unique: true, trim: true },
   deviceName: { type: String, required: true },
   deviceSerial: { type: String }, 
   
   // Organization & Specs
-  dept: { type: String },
+  dept: { type: String, default: "Unassigned" },
   firm: { type: String },
   capacity: { type: String },
   
@@ -16,8 +16,7 @@ const deviceSchema = new mongoose.Schema({
   videoServer: { type: String, default: "Video Server H264+AAC" },
   recordVideo: { type: String, default: "No" },
   
-  // NEW: Live Camera Sync
-  // This stores the RTSP/HLS/HTTP stream link for the live feed
+  // Live Camera Sync
   streamUrl: { type: String, default: "" },
 
   // GPS & Fence
