@@ -26,6 +26,7 @@ exports.addDevice = async (req, res) => {
     const savedDevice = await newDevice.save();
     res.status(201).json(savedDevice);
   } catch (err) {
+    // Catch Duplicate Device ID Error
     if (err.code === 11000) {
       return res.status(400).json({ message: "Device ID already exists." });
     }
@@ -33,10 +34,14 @@ exports.addDevice = async (req, res) => {
   }
 };
 
-// PUT update device
+// PUT update device (SLOT FIX ADDED HERE)
 exports.updateDevice = async (req, res) => {
   try {
+    const { id } = req.params;
     const updateData = { ...req.body };
+
+    // DEBUG: This will show in your Render logs
+    console.log(`Backend received update for ${id}:`, updateData);
 
     // Auto-update status based on the presence of a stream URL
     if (updateData.streamUrl !== undefined) {
@@ -45,15 +50,21 @@ exports.updateDevice = async (req, res) => {
         : "Offline";
     }
 
+    // Force findByIdAndUpdate to use $set so it specifically targets the 'slot' field
     const updated = await Device.findByIdAndUpdate(
-      req.params.id, 
-      updateData, 
+      id, 
+      { $set: updateData }, 
       { new: true, runValidators: true }
     );
     
-    if (!updated) return res.status(404).json({ message: "Device not found" });
+    if (!updated) {
+      return res.status(404).json({ message: "Device not found" });
+    }
+
+    console.log("Device updated successfully:", updated.deviceName, "Slot:", updated.slot);
     res.json(updated);
   } catch (err) {
+    console.error("Update Error:", err.message);
     res.status(400).json({ message: "Update Error: " + err.message });
   }
 };
