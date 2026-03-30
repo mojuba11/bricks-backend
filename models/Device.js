@@ -34,7 +34,12 @@ const deviceSchema = new mongoose.Schema({
 
   // UI/Map related
   status: { type: String, default: "Offline" },
-  batteryLevel: { type: Number, default: 100 }
+  batteryLevel: { type: Number, default: 100 },
+
+  // --- NEW FIELD FOR LIVE GRID ---
+  // Stores which box (1-16) the camera is assigned to
+  slot: { type: String, default: null }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model("Device", deviceSchema);
