@@ -2,8 +2,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 // --- YOUR SPECIFIC CONFIG ---
-const DROIDCAM_IP = "10.169.7.47"; // Change this if the other IP is the phone
-const PORT = "4747";
+const DROIDCAM_IP = "10.228.252.147"; // Change this if the other IP is the phone
+const PORT = "8080";
 const STREAM_URL = `http://${DROIDCAM_IP}:${PORT}/mjpegfeed`;
 const OUTPUT_FILE = path.join(__dirname, `bodycam_evidence_${Date.now()}.mp4`);
 
