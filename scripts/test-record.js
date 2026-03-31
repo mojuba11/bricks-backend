@@ -1,34 +1,53 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-// --- YOUR SPECIFIC CONFIG ---
-// I kept your local IP (10.228.252.147). If the phone IP changed, update it here.
+// --- CONFIGURATION ---
+// 1. Double-check this IP matches the "WiFi IP" on your DroidCam phone app
 const DROIDCAM_IP = "10.228.252.147"; 
 const PORT = "8080";
-const STREAM_URL = `http://${DROIDCAM_IP}:${PORT}/video`;
+
+// 2. Use /mjpegfeed for direct streaming (better for FFmpeg than /video)
+const STREAM_URL = `http://${DROIDCAM_IP}:${PORT}/mjpegfeed`;
 const OUTPUT_FILE = path.join(__dirname, `bodycam_evidence_${Date.now()}.mp4`);
 
-console.log(`🚀 Connecting to Bodycam at ${STREAM_URL}...`);
+console.log(`🚀 Attempting to connect to Bodycam at ${STREAM_URL}...`);
+console.log(`⚠️  Make sure all browser tabs to this IP are CLOSED.`);
 
-// FFmpeg command to grab the MJPEG stream and save as H264 MP4
+// FFmpeg command optimized for VM performance and quick connection
 const ffmpeg = spawn('ffmpeg', [
-  '-i', STREAM_URL,
-  '-t', '20',             // Record for 20 seconds for this test
-  '-c:v', 'libx264',      // Convert to H.264
-  '-pix_fmt', 'yuv420p',  // Ensure it plays in Chrome/Dashboard
-  '-y',                   // Overwrite if exists
+  '-hide_banner',            // Clean up terminal output
+  '-loglevel', 'error',      // Only show serious errors
+  '-connect_timeout', '5000',// Stop trying after 5 seconds if "Busy"
+  '-probesize', '32',        // Analyze less data to start recording instantly
+  '-i', STREAM_URL,          // The Input Stream
+  '-t', '20',                // Record for 20 seconds
+  '-c:v', 'libx264',         // Encode to H.264
+  '-preset', 'ultrafast',    // Use minimum CPU (Crucial for VMs)
+  '-pix_fmt', 'yuv420p',     // Compatibility for all players
+  '-y',                      // Overwrite existing file
   OUTPUT_FILE
 ]);
 
+// Log recording progress/errors
 ffmpeg.stderr.on('data', (data) => {
-  // Shows recording progress in your terminal
-  console.log(`Recording Progress: ${data.toString().split('\n')[0]}`);
+  console.log(`[FFmpeg Info]: ${data.toString().trim()}`);
 });
 
 ffmpeg.on('close', (code) => {
   if (code === 0) {
-    console.log(`\n✅ SUCCESS! Document saved to: ${OUTPUT_FILE}`);
+    console.log(`\n✅ SUCCESS! Evidence saved to: ${OUTPUT_FILE}`);
   } else {
-    console.error(`\n❌ ERROR: FFmpeg failed. Is DroidCam running at ${DROIDCAM_IP}?`);
+    console.error(`\n❌ ERROR: FFmpeg exited with code ${code}.`);
+    console.error(`Possible reasons:`);
+    console.error(`1. DroidCam is open in a browser tab (Close it!)`);
+    console.error(`2. Phone and VM are on different networks.`);
+    console.error(`3. The IP address ${DROIDCAM_IP} has changed.`);
   }
+});
+
+// Handle script interruption (Ctrl+C) gracefully
+process.on('SIGINT', () => {
+  ffmpeg.kill('SIGINT');
+  console.log('\nStopping recording...');
+  process.exit();
 });
