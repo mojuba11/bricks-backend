@@ -3,7 +3,7 @@ const path = require('path');
 
 // --- CONFIGURATION ---
 // 1. Double-check this IP matches the "WiFi IP" on your DroidCam phone app
-const DROIDCAM_IP = "192.168.1.164"; 
+const DROIDCAM_IP = "10.134.162.206"; 
 const PORT = "8080";
 
 // 2. Use /mjpegfeed for direct streaming (better for FFmpeg than /video)
