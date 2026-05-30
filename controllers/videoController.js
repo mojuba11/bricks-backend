@@ -1,6 +1,8 @@
-const obsClient = require("../models/obsClient"); // Ensure you create this client file
+const s3Client = require("../models/s3Client"); // Imported universal v3 client
+const { PutObjectCommand } = require("@aws-sdk/client-s3"); // Required for universal S3 uploads
 const Device = require("../models/Device");
 const fs = require("fs");
+const path = require("path");
 
 // 1. Webhook: Receives real-time GPS metadata from the streaming server
 exports.handleLiveGPS = async (req, res) => {
@@ -30,45 +32,52 @@ exports.handleLiveGPS = async (req, res) => {
   }
 };
 
-// 2. Webhook: Fired when stream stops. Transfers the video from ECS storage to OBS
+// 2. Webhook: Fired when stream stops. Transfers the video from ECS storage to Cloud Object Storage
 exports.archiveStreamToOBS = async (req, res) => {
   try {
+    // Media server passes the deviceId and either a local path or filename 
     const { deviceId, localFilePath } = req.body; 
     
     if (!localFilePath || !fs.existsSync(localFilePath)) {
-      return res.status(400).json({ message: "Source video file not found on ECS" });
+      return res.status(400).json({ message: "Source video file not found on ECS local drive" });
     }
 
     const dateStamp = new Date().toISOString().split("T")[0];
-    const obsObjectKey = `bodycam_evidence/${deviceId}/${dateStamp}_${Date.now()}.mp4`;
+    const objectKey = `bodycam_evidence/${deviceId || 'unknown'}/${dateStamp}_${Date.now()}.mp4`;
 
-    // Stream the temporary file straight off your ECS into your cloud storage bucket
-    obsClient.putObject({
-      Bucket: process.env.OBS_BUCKET_NAME,
-      Key: obsObjectKey,
-      SourceFile: localFilePath 
-    }, async (err, result) => {
-      if (err || result.CommonMsg.Status >= 300) {
-        console.error("OBS Upload Failed:", err || result.CommonMsg.Code);
-        return res.status(500).json({ error: "Failed to upload video to OBS" });
-      }
+    // Create a high-performance readable stream from the ECS local hard drive file
+    const fileStream = fs.createReadStream(localFilePath);
 
-      // Cleanup: Erase the temporary video from your ECS disk storage
+    const uploadParams = {
+      Bucket: process.env.CLOUD_STORAGE_BUCKET_NAME,
+      Key: objectKey,
+      Body: fileStream,
+      ContentType: "video/mp4"
+    };
+
+    // Execute the command using the universal S3 SDK standard
+    await s3Client.send(new PutObjectCommand(uploadParams));
+
+    // Cleanup: Securely erase the temporary video from your ECS disk storage to preserve space
+    if (fs.existsSync(localFilePath)) {
       fs.unlinkSync(localFilePath);
+    }
 
-      // Optional: Log the recorded cloud playback URL back into the database
+    // Log the recorded cloud object key back into the database device schema
+    if (deviceId) {
       await Device.findOneAndUpdate(
         { deviceId },
-        { $set: { lastRecordedVideo: obsObjectKey } }
+        { $set: { lastRecordedVideo: objectKey } }
       );
+    }
 
-      res.status(200).json({ 
-        message: "Video successfully stored in OBS and cleared from ECS local cache", 
-        cloudPath: obsObjectKey 
-      });
+    res.status(200).json({ 
+      message: "Video successfully stored in cloud object storage and cleared from ECS local cache", 
+      cloudPath: objectKey 
     });
 
   } catch (err) {
+    console.error("Cloud Storage Archiving Exception:", err.message);
     res.status(500).json({ error: "Archiving Exception: " + err.message });
   }
 };
