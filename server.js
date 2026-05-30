@@ -18,6 +18,7 @@ const deptRoutes = require("./routes/deptRoutes");
 const deviceRoutes = require("./routes/deviceRoutes"); // Matches your router file
 const fenceRoutes = require("./routes/fenceRoutes");
 const intercomRoutes = require("./routes/intercomRoutes");
+const videoRoutes = require("./routes/videoRoutes"); // NEW: Added for OBS Storage & GPS streams
 
 /* ---------------- API ENDPOINTS ---------------- */
 app.use("/api/users", userRoutes);
@@ -26,10 +27,11 @@ app.use("/api/departments", deptRoutes);
 /** * FIXED: Changed from "/api/devices" to "/api/device" 
  * to match Frontend API_URL: https://.../api/device
  */
-app.use("/api/device", deviceRoutes); 
+app.use("/api/device", deviceRoutes); // Contains CRUD + stream-start/stream-stop hooks
 
 app.use("/api/fences", fenceRoutes);
 app.use("/api/intercom", intercomRoutes);
+app.use("/api/video", videoRoutes); // NEW: Dedicated ingestion endpoint for media server events
 
 /* ---------------- TEST & HEALTH CHECK ---------------- */
 app.get("/", (req, res) => {
@@ -37,7 +39,7 @@ app.get("/", (req, res) => {
     status: "Online", 
     message: "BRICKS Bodycam Backend API is running...",
     db_status: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected",
-    version: "1.0.2" // Updated version for tracking
+    version: "1.0.3" // Incremented version to track your deployment update
   });
 });
 
