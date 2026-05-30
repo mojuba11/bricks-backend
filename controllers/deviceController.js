@@ -34,7 +34,7 @@ exports.addDevice = async (req, res) => {
   }
 };
 
-// PUT update device (SLOT FIX ADDED HERE)
+// PUT update device (SLOT FIX KEPT HERE)
 exports.updateDevice = async (req, res) => {
   try {
     const { id } = req.params;
@@ -77,5 +77,63 @@ exports.deleteDevice = async (req, res) => {
     res.json({ message: "Device deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Delete Error: " + err.message });
+  }
+};
+
+// =========================================================================
+// NEW WEBHOOK CODES BELOW: LINKED DIRECTLY TO THE LIVE STREAMING SERVER
+// =========================================================================
+
+// Webhook: Fired when streaming gateway signals an active connection from a bodycam
+exports.setDeviceOnline = async (req, res) => {
+  try {
+    const { deviceId, playUrl } = req.body; 
+
+    if (!deviceId) {
+      return res.status(400).json({ message: "Missing required deviceId payload parameter" });
+    }
+
+    const updated = await Device.findOneAndUpdate(
+      { deviceId }, // Uses hardware identity attribute
+      { $set: { status: "Online", streamUrl: playUrl } },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: `Streaming device matching Device ID ${deviceId} not registered in DB` });
+    }
+
+    console.log(`Live Stream Signal Hook: ${updated.deviceName} is now active.`);
+    res.json({ message: "Device marked Online successfully", device: updated });
+  } catch (err) {
+    console.error("Stream Online Webhook Error:", err.message);
+    res.status(500).json({ message: "Server Stream Hook Error: " + err.message });
+  }
+};
+
+// Webhook: Fired when streaming gateway detects a physical drop/cutoff
+exports.setDeviceOffline = async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({ message: "Missing required deviceId payload parameter" });
+    }
+
+    const updated = await Device.findOneAndUpdate(
+      { deviceId },
+      { $set: { status: "Offline" } },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: `Device ID ${deviceId} not found` });
+    }
+
+    console.log(`Disconnected Stream Hook: ${updated.deviceName} changed status to Offline.`);
+    res.json({ message: "Device marked Offline successfully", device: updated });
+  } catch (err) {
+    console.error("Stream Offline Webhook Error:", err.message);
+    res.status(500).json({ message: "Server Stream Hook Error: " + err.message });
   }
 };
