@@ -84,6 +84,38 @@ exports.deleteDevice = async (req, res) => {
 // NEW WEBHOOK CODES BELOW: LINKED DIRECTLY TO THE LIVE STREAMING SERVER
 // =========================================================================
 
+// 📍 NEW: Heartbeat status logic explicitly handling the dynamic AWS Gateway stream pings
+exports.updateDeviceHeartbeat = async (req, res) => {
+  try {
+    const { deviceId, status, streamEndpoint } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({ message: "Missing required deviceId payload parameter" });
+    }
+
+    // Maps streamEndpoint to your schema's 'streamUrl' and normalizes 'online' casing to 'Online'
+    const statusFormatted = status ? status.charAt(0).toUpperCase() + status.slice(1) : "Online";
+
+    const updated = await Device.findOneAndUpdate(
+      { deviceId },
+      { 
+        $set: { 
+          status: statusFormatted, 
+          streamUrl: streamEndpoint,
+          lastPing: new Date()
+        } 
+      },
+      { new: true, runValidators: true, upsert: true } // Upsert fallback drops device into DB if missing
+    );
+
+    console.log(`[AWS Gateway] Heartbeat Received: Camera ${deviceId} is currently ${statusFormatted}.`);
+    res.status(200).json({ success: true, message: `Device ${deviceId} sync successful.`, device: updated });
+  } catch (err) {
+    console.error("AWS Gateway Heartbeat Error:", err.message);
+    res.status(500).json({ success: false, message: "Gateway processing error: " + err.message });
+  }
+};
+
 // Webhook: Fired when streaming gateway signals an active connection from a bodycam
 exports.setDeviceOnline = async (req, res) => {
   try {
