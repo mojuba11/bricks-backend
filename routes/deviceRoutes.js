@@ -4,7 +4,8 @@ const {
   getDevices, 
   addDevice, 
   updateDevice, 
-  deleteDevice 
+  deleteDevice,
+  updateDeviceHeartbeat // 📍 NEW: Imported your heartbeat controller function
 } = require("../controllers/deviceController");
 
 /**
@@ -17,6 +18,10 @@ router.get("/", getDevices);
 
 // @route   POST /api/device
 router.post("/", addDevice);
+
+// @route   POST /api/device/heartbeat
+// 📍 NEW: This maps the exact singular path your AWS script is hitting
+router.post("/heartbeat", updateDeviceHeartbeat); 
 
 // @route   PUT /api/device/:id
 router.put("/:id", updateDevice);
