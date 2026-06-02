@@ -11,19 +11,34 @@ const generateToken = (id) => {
 
 exports.registerUser = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
-    const existing = await User.findOne({ $or: [{ username }, { email }] });
-    if (existing) return res.status(400).json({ message: "User already exists" });
+    const { username, userId, email, password } = req.body;
+    
+    // Check fallback targets cleanly to prevent duplicate registration rows
+    const identifier = userId || username;
+    const existing = await User.findOne({ 
+      $or: [
+        { userId: identifier }, 
+        { email }
+      ] 
+    });
+    
+    if (existing) return res.status(400).json({ message: "User already exists with this ID or Email" });
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const newUser = new User({ ...req.body, password: hashedPassword });
+    // Normalize keys to align with the underlying database model attributes
+    const newUser = new User({ 
+      ...req.body, 
+      userId: identifier,
+      password: hashedPassword 
+    });
     await newUser.save();
 
     res.status(201).json({
       _id: newUser._id,
-      username: newUser.username,
+      userId: newUser.userId,
+      email: newUser.email,
       token: generateToken(newUser._id)
     });
   } catch (err) {
@@ -33,16 +48,33 @@ exports.registerUser = async (req, res) => {
 
 exports.loginUser = async (req, res) => {
   try {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username });
+    // 1. Accept either 'username' or 'email' keys directly from your frontend login payloads
+    const { username, email, password } = req.body;
+    const incomingId = email || username;
+
+    if (!incomingId || !password) {
+      return res.status(400).json({ message: "Identifier credentials and password are required." });
+    }
+
+    // 2. Query both target identification slots ($or conditional routing lookup block)
+    const user = await User.findOne({
+      $or: [
+        { email: incomingId.trim() },
+        { userId: incomingId.trim() } // Successfully matches 'TEST' column properties
+      ]
+    });
+
+    // 3. Cryptographically compare passwords using the database document hash
     if (user && (await bcrypt.compare(password, user.password))) {
       res.json({
         _id: user._id,
-        username: user.username,
+        userId: user.userId,
+        email: user.email,
+        userName: user.name, // Populates your frontend localStorage item "userName" cleanly
         token: generateToken(user._id)
       });
     } else {
-      res.status(401).json({ message: "Invalid username or password" });
+      res.status(401).json({ message: "Invalid identification credentials or password" });
     }
   } catch (err) {
     res.status(500).json({ message: "Login Error: " + err.message });
@@ -56,7 +88,11 @@ exports.getUsers = async (req, res) => {
     const users = await User.find().select("-password");
     const mappedUsers = users.map(user => {
       const u = user.toObject();
-      return { ...u, userName: u.name, dept: u.dept || "Unassigned" };
+      return { 
+        ...u, 
+        userName: u.name || u.userName, 
+        dept: u.dept || "Unassigned" 
+      };
     });
     res.json(mappedUsers);
   } catch (err) {
@@ -70,7 +106,8 @@ exports.searchUsers = async (req, res) => {
     const users = await User.find({ 
       $or: [
         { name: new RegExp(q, 'i') },
-        { username: new RegExp(q, 'i') }
+        { userId: new RegExp(q, 'i') }, // Replaced unaligned legacy username property search
+        { email: new RegExp(q, 'i') }
       ] 
     }).select("-password");
     res.json(users);
